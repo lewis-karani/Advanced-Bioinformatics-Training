@@ -2,9 +2,11 @@
 
 # Define the conda environment for each rule
 envs = {
-    "quality_control": "envs/quality_control.yml",
-    "assembly": "envs/assembly.yml",
+    "trimming": "envs/trimming.yml",
     "alignment": "envs/alignment.yml",
+    "variant_calling": "envs/variant_calling.yml",
+    "polishing": "envs/polishing.yml",
+    "msa": "envs/msa.yml",
     "phylogeny": "envs/phylogeny.yml"
 }
 
@@ -16,76 +18,95 @@ rule all:
     input:
         "results/phylogenetic_tree.nwk"
 
-# Step 1: Quality Control
-rule quality_control:
+# Step 1: Adapter Trimming with Porechop
+rule porechop:
     input:
         "data/{sample}.fastq"
     output:
-        "data/{sample}_filtered.fastq"
+        "data/{sample}_trimmed.fastq"
     conda:
-        envs["quality_control"]
+        envs["trimming"]
     shell:
         """
-        nanofilt -q 7 --length 400 < {input} > {output}
+        porechop -i {input} -o {output}
         """
 
-# Step 2: Genome Assembly
-rule genome_assembly:
+# Step 2: Quality Trimming with Trimmomatic
+rule trimmomatic:
     input:
-        "data/{sample}_filtered.fastq"
+        "data/{sample}_trimmed.fastq"
     output:
-        "assembly/{sample}_assembly.fasta"
+        "data/{sample}_trimmed_filtered.fastq"
     conda:
-        envs["assembly"]
+        envs["trimming"]
     shell:
         """
-        flye --nano-raw {input} --out-dir assembly/{wildcards.sample} --genome-size 30k
+        trimmomatic SE {input} {output} SLIDINGWINDOW:4:20 MINLEN:50
         """
 
-# Step 3: Reference-based Alignment
+# Step 3: Reference-based Alignment with Minimap2
 rule alignment:
     input:
-        "assembly/{sample}_assembly.fasta",
+        "data/{sample}_trimmed_filtered.fastq",
         "reference/sars_cov_2_reference.fasta"
     output:
-        "alignment/{sample}_aligned.sam"
+        "alignment/{sample}_aligned.bam"
     conda:
         envs["alignment"]
     shell:
         """
-        minimap2 -a {input[1]} {input[0]} > {output}
+        minimap2 -a {input[1]} {input[0]} | samtools view -b | samtools sort -o {output}
+        samtools index {output}
         """
 
-# Step 4: Consensus Generation
-rule consensus:
+# Step 4: Variant Calling and Consensus Generation with iVar
+rule ivar:
     input:
-        "alignment/{sample}_aligned.sam"
+        bam="alignment/{sample}_aligned.bam",
+        bai="alignment/{sample}_aligned.bam.bai",
+        ref="reference/sars_cov_2_reference.fasta"
     output:
-        "consensus/{sample}_consensus.fasta"
+        "variants/{sample}.vcf",
+        "consensus/{sample}_consensus.fa"
     conda:
-        envs["alignment"]
+        envs["variant_calling"]
     shell:
         """
-        samtools view -Sb {input} | samtools sort -o {wildcards.sample}.sorted.bam
-        samtools mpileup -uf reference/sars_cov_2_reference.fasta {wildcards.sample}.sorted.bam | bcftools call -mv -Oz -o {wildcards.sample}.vcf.gz
-        bcftools index {wildcards.sample}.vcf.gz
-        bcftools consensus -f reference/sars_cov_2_reference.fasta {wildcards.sample}.vcf.gz > {output}
+        samtools mpileup -A -d 0 -Q 0 -u -v -f {input.ref} {input.bam} | bcftools call -cv -Oz -o {output[0]}
+        bcftools index {output[0]}
+        ivar consensus -p {output[1]} -q 20 -t 0.5 -m 10 -n N -i {input.ref} -b {input.bam} -v {output[0]}
         """
 
-# Step 5: Multiple Sequence Alignment
+# Step 5: Polishing with Medaka
+rule medaka:
+    input:
+        bam="alignment/{sample}_aligned.bam",
+        ref="reference/sars_cov_2_reference.fasta",
+        consensus="consensus/{sample}_consensus.fa"
+    output:
+        "polished/{sample}_polished.fasta"
+    conda:
+        envs["polishing"]
+    shell:
+        """
+        medaka_consensus -i {input.bam} -d {input.consensus} -o polished/{wildcards.sample}
+        cp polished/{wildcards.sample}/consensus.fasta {output}
+        """
+
+# Step 6: Multiple Sequence Alignment with MAFFT
 rule multiple_sequence_alignment:
     input:
-        expand("consensus/{sample}_consensus.fasta", sample=samples)
+        expand("polished/{sample}_polished.fasta", sample=samples)
     output:
         "msa/alignment.fasta"
     conda:
-        envs["alignment"]
+        envs["msa"]
     shell:
         """
         mafft --auto --reorder {input} > {output}
         """
 
-# Step 6: Phylogenetic Tree Construction
+# Step 7: Phylogenetic Tree Construction with IQ-TREE
 rule phylogenetic_tree:
     input:
         "msa/alignment.fasta"
@@ -95,5 +116,6 @@ rule phylogenetic_tree:
         envs["phylogeny"]
     shell:
         """
-        fasttree -gtr -nt {input} > {output}
+        iqtree -s {input} -nt AUTO -m GTR+G -bb 1000 -alrt 1000 -pre results/phylogenetic_tree
+        cp results/phylogenetic_tree.treefile {output}
         """
