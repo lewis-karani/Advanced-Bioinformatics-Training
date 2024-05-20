@@ -1,0 +1,60 @@
+Porechop for adapter trimming.
+Trimmomatic for additional read trimming.
+Minimap2 for alignment.
+Samtools for manipulating alignment files.
+iVar for variant calling and consensus generation.
+Medaka for polishing.
+MAFFT for multiple sequence alignment.
+IQ-TREE for phylogenetic tree construction.
+
+envs/trimming.yml
+name: trimming
+channels:
+      - bioconda
+      - conda-forge
+dependencies:
+      - porechop
+      - trimmomatic
+
+envs/alignment.yml
+name: alignment
+channels:
+      - bioconda
+      - conda-forge
+dependencies:
+     - minimap2
+     - samtools
+
+envs/variant_calling.yml
+name: variant_calling
+channels:
+    - bioconda
+    - conda-forge
+dependencies:
+    - samtools
+    - bcftools
+    - ivar
+
+envs/polishing.yml
+name: polishing
+channels:
+    - bioconda
+    - conda-forge
+dependencies:
+    - medaka
+
+envs/msa.yml
+name: msa
+channels:
+    - bioconda
+    - conda-forge
+dependencies:
+     - mafft
+
+envs/phylogeny.yml
+name: phylogeny
+channels:
+    - bioconda
+    - conda-forge
+dependencies:
+    - iqtree
