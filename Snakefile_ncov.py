@@ -11,8 +11,8 @@ envs = {
 }
 
 # Define the input fastq files
-samples = ["sample1", "sample2", "sample3"]
-fastq_files = expand("data/{sample}.fastq", sample=samples)
+samples = ["*.fastq.gz"]
+fastq_files = expand("data/barcode*/{sample}", sample=samples)
 
 rule all:
     input:
@@ -41,21 +41,21 @@ rule trimmomatic:
         envs["trimming"]
     shell:
         """
-        trimmomatic SE {input} {output} SLIDINGWINDOW:4:20 MINLEN:50
+        trimmomatic SE {input} {output} SLIDINGWINDOW:50:10 MINLEN:100
         """
 
 # Step 3: Reference-based Alignment with Minimap2
 rule alignment:
     input:
         "data/{sample}_trimmed_filtered.fastq",
-        "reference/sars_cov_2_reference.fasta"
+        "reference/reference.fasta"
     output:
         "alignment/{sample}_aligned.bam"
     conda:
         envs["alignment"]
     shell:
         """
-        minimap2 -a {input[1]} {input[0]} | samtools view -b | samtools sort -o {output}
+        minimap2 -ax map-ont {input[1]} {input[0]} | samtools view -bS | samtools sort -o {output}
         samtools index {output}
         """
 
@@ -64,7 +64,7 @@ rule ivar:
     input:
         bam="alignment/{sample}_aligned.bam",
         bai="alignment/{sample}_aligned.bam.bai",
-        ref="reference/sars_cov_2_reference.fasta"
+        ref="reference/reference.fasta"
     output:
         "variants/{sample}.vcf",
         "consensus/{sample}_consensus.fa"
