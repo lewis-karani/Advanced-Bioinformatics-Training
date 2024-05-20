@@ -1,86 +1,99 @@
-# Snakefile
+# Snakefile for SARS-CoV-2 nanopore reads analysis to generate a phylogenetic tree
 
-import os
+# Define the conda environment for each rule
+envs = {
+    "quality_control": "envs/quality_control.yml",
+    "assembly": "envs/assembly.yml",
+    "alignment": "envs/alignment.yml",
+    "phylogeny": "envs/phylogeny.yml"
+}
 
-RAW_READS_DIR = "raw_reads"
-ADAPTER_REMOVED_DIR = "adapter_removed"
-TRIMMED_READS_DIR = "trimmed_reads"
-READMAPPING_DIR = "readmapping"
-REFERENCE = "../Reference/sarscov2-Wu1.fasta"
-BED_FILE = "../artic_v3/ARTIC-V3.bed"
-MEDAKA_OUTPUT_DIR = "./medaka_output2"
-THREADS = 23
+# Define the input fastq files
+samples = ["sample1", "sample2", "sample3"]
+fastq_files = expand("data/{sample}.fastq", sample=samples)
 
 rule all:
     input:
-        expand(READMAPPING_DIR + "/{sample}_primertrim_sorted.bam", sample=[f"sample{i:02d}" for i in range(1, 25)]),
-        expand(MEDAKA_OUTPUT_DIR + "/sample{sample:02d}/sample{sample:02d}.fasta", sample=range(1, 25))
+        "results/phylogenetic_tree.nwk"
 
-rule porechop:
+# Step 1: Quality Control
+rule quality_control:
     input:
-        RAW_READS_DIR + "/{sample}.fastq.gz"
+        "data/{sample}.fastq"
     output:
-        ADAPTER_REMOVED_DIR + "/{sample}_adapter_rm.fastq.gz"
+        "data/{sample}_filtered.fastq"
+    conda:
+        envs["quality_control"]
     shell:
-        "porechop -i {input} -o {output}"
+        """
+        nanofilt -q 7 --length 400 < {input} > {output}
+        """
 
-rule trimmomatic:
+# Step 2: Genome Assembly
+rule genome_assembly:
     input:
-        ADAPTER_REMOVED_DIR + "/{sample}_adapter_rm.fastq.gz"
+        "data/{sample}_filtered.fastq"
     output:
-        TRIMMED_READS_DIR + "/{sample}_trimmed.fastq.gz"
+        "assembly/{sample}_assembly.fasta"
+    conda:
+        envs["assembly"]
     shell:
-        "trimmomatic SE -threads {THREADS} -phred33 {input} {output} SLIDINGWINDOW:50:10 MINLEN:100"
+        """
+        flye --nano-raw {input} --out-dir assembly/{wildcards.sample} --genome-size 30k
+        """
 
-rule unpigz:
+# Step 3: Reference-based Alignment
+rule alignment:
     input:
-        TRIMMED_READS_DIR + "/{sample}_trimmed.fastq.gz"
+        "assembly/{sample}_assembly.fasta",
+        "reference/sars_cov_2_reference.fasta"
     output:
-        TRIMMED_READS_DIR + "/{sample}_trimmed.fastq"
+        "alignment/{sample}_aligned.sam"
+    conda:
+        envs["alignment"]
     shell:
-        "unpigz {input}"
+        """
+        minimap2 -a {input[1]} {input[0]} > {output}
+        """
 
-rule minimap2:
+# Step 4: Consensus Generation
+rule consensus:
     input:
-        TRIMMED_READS_DIR + "/{sample}_trimmed.fastq"
+        "alignment/{sample}_aligned.sam"
     output:
-        READMAPPING_DIR + "/{sample}_aln.bam"
+        "consensus/{sample}_consensus.fasta"
+    conda:
+        envs["alignment"]
     shell:
-        "minimap2 -ax map-ont {REFERENCE} {input} > {output}"
+        """
+        samtools view -Sb {input} | samtools sort -o {wildcards.sample}.sorted.bam
+        samtools mpileup -uf reference/sars_cov_2_reference.fasta {wildcards.sample}.sorted.bam | bcftools call -mv -Oz -o {wildcards.sample}.vcf.gz
+        bcftools index {wildcards.sample}.vcf.gz
+        bcftools consensus -f reference/sars_cov_2_reference.fasta {wildcards.sample}.vcf.gz > {output}
+        """
 
-rule samtools_sort:
+# Step 5: Multiple Sequence Alignment
+rule multiple_sequence_alignment:
     input:
-        READMAPPING_DIR + "/{sample}_aln.bam"
+        expand("consensus/{sample}_consensus.fasta", sample=samples)
     output:
-        READMAPPING_DIR + "/{sample}_sorted.bam"
+        "msa/alignment.fasta"
+    conda:
+        envs["alignment"]
     shell:
-        "samtools sort {input} > {output}"
+        """
+        mafft --auto --reorder {input} > {output}
+        """
 
-rule ivar_trim:
+# Step 6: Phylogenetic Tree Construction
+rule phylogenetic_tree:
     input:
-        READMAPPING_DIR + "/{sample}_sorted.bam"
+        "msa/alignment.fasta"
     output:
-        READMAPPING_DIR + "/{sample}_primertrim.bam"
+        "results/phylogenetic_tree.nwk"
+    conda:
+        envs["phylogeny"]
     shell:
-        "ivar trim -e -i {input} -b {BED_FILE} -p {output.replace('.bam', '')}"
-
-rule samtools_sort_trimmed:
-    input:
-        READMAPPING_DIR + "/{sample}_primertrim.bam"
-    output:
-        READMAPPING_DIR + "/{sample}_primertrim_sorted.bam"
-    shell:
-        "samtools sort {input} -o {output}"
-
-rule medaka_consensus:
-    input:
-        READMAPPING_DIR + "/{sample}_primertrim_sorted.bam"
-    output:
-        MEDAKA_OUTPUT_DIR + "/{sample}/{sample}.fasta"
-    params:
-        hdf="{MEDAKA_OUTPUT_DIR}/{sample}/{sample}.hdf",
-        output_dir=lambda wildcards: f"{MEDAKA_OUTPUT_DIR}/{wildcards.sample}"
-    run:
-        shell("mkdir -p {params.output_dir}")
-        shell("medaka consensus {input} {params.hdf} --model r941_min_high_g360 --batch 200 --threads 2")
-        shell("medaka stitch {params.hdf} {REFERENCE} {output}")
+        """
+        fasttree -gtr -nt {input} > {output}
+        """
