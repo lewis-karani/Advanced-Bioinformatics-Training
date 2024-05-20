@@ -1,0 +1,80 @@
+SAMPLE =  ["barcode01", "barcode02", "barcode03", "barcode04", "barcode05"]
+
+rule all:
+    input:
+        expand("OUTPUT/{sample}_sorted.bam.bai", sample=SAMPLES)
+
+rule minimap2_mapping:
+    input: "genome_ref/sarscov2-Wu1.fasta", "INPUT/{sample}.fastq"
+    output: "OUTPUT/{sample}.bam"
+    shell: "minimap2 -ax map-ont {input} | samtools view -Sb - > {output}"
+
+rule samtools_sort:
+    input: "OUTPUT/{sample}.bam"
+    output: "OUTPUT/{sample}_sorted.bam"
+    shell: "samtools sort {input} -o {output}"
+
+rule samtools_index:
+    input: "OUTPUT/{sample}_sorted.bam"
+    output: "OUTPUT/{sample}_sorted.bam.bai"
+    shell: "samtools index {input}"
+	
+	
+	
+	
+	rule all:
+    input:
+        expand("OUTPUT/{sample}.vcf", sample=SAMPLES)
+
+rule variant_calling:
+    input:
+        bam="OUTPUT/{sample}_sorted.bam",
+        reference="genome_ref/sarscov2-Wu1.fasta"
+    output:
+        vcf="OUTPUT/{sample}.vcf"
+
+    shell:
+        """
+        bcftools mpileup -Ou -f {input.reference} {input.bam} | \
+        bcftools call -mv -Ov -o {output.vcf}
+        """
+		
+		
+		rule all:
+    input:
+        expand("OUTPUT/consensus/{sample}.fa", sample=SAMPLES)
+
+rule mpileup:
+    input:
+        bam="OUTPUT/bam/{sample}_sorted.bam"
+    output:
+        consensus="OUTPUT/consensus/{sample}.fa"
+    shell:
+        """
+        samtools mpileup -aa -A -d 0 -Q 0 {input.bam} | ivar consensus -p {output.consensus}
+        """
+		
+		
+	
+
+
+		rule all:
+    input:
+        expand("OUTPUT/bam/{sample}_sorted.bam.bai", sample=SAMPLES)
+
+#aligning samples to reference genome with minimap2
+rule minimap2_mapping:
+    input: "genome_ref/sarscov2-Wu1.fasta", "INPUT/{sample}.fastq"
+    output: "OUTPUT/bam/{sample}.bam"
+    shell: "minimap2 -ax map-ont {input} | samtools view -Sb - > {output}"
+
+rule samtools_sort:
+    input: "OUTPUT/bam/{sample}.bam"
+    output: "OUTPUT/bam/{sample}_sorted.bam"
+    shell: "samtools sort {input} -o {output}"
+
+rule samtools_index:
+    input: "OUTPUT/bam/{sample}_sorted.bam"
+    output: "OUTPUT/bam/{sample}_sorted.bam.bai"
+    shell: "samtools index {input}"
+	
