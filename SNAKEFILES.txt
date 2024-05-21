@@ -14,3 +14,14 @@ rule porechop:
     shell:
         """
         porechop -i {input} -o {output}
+
+# Step 2: Quality Trimming with Trimmomatic
+rule trimmomatic:
+    input:
+        "data/{sample}_trimmed.fastq"
+    output:
+        "data/{sample}_trimmed_filtered.fastq"
+    shell:
+        """
+        trimmomatic SE -phred33 {input} {output} SLIDINGWINDOW:50:10 MINLEN:100
+        """
