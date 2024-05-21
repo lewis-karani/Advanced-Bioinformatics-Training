@@ -2,7 +2,7 @@
 
 # Define the input fastq files
 samples = ["*.fastq.gz"]
-fastq_files = expand("data/barcode*/{sample}", sample=samples)
+fastq_files = expand("data/{sample}", sample=samples)
 
 rule all:
     input:
