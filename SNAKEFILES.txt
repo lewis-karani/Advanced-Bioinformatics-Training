@@ -23,5 +23,5 @@ rule trimmomatic:
         "data/{sample}_trimmed_filtered.fastq"
     shell:
         """
-        trimmomatic SE -phred33 {input} {output} SLIDINGWINDOW:50:10 MINLEN:100
+        trimmomatic SE -threads 23 -phred33 {input} {output} SLIDINGWINDOW:50:10 MINLEN:100
         """
