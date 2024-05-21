@@ -3,7 +3,7 @@ SAMPLES = ["barcode07", "barcode16"]
 
 rule all:
     input:
-        expand("data/{sample}_trimmed_filtered.fastq", sample=SAMPLES)
+        expand("alignment/{sample}_aligned.bam", sample=SAMPLES)
 
 # Step 1: Adapter Trimming with Porechop
 rule porechop:
@@ -24,4 +24,17 @@ rule trimmomatic:
     shell:
         """
         trimmomatic SE -threads 23 -phred33 {input} {output} SLIDINGWINDOW:50:10 MINLEN:100
+        """
+
+# Step 3: Reference-based Alignment with Minimap2
+rule alignment:
+    input:
+        "data/{sample}_trimmed_filtered.fastq",
+        "reference.fasta"
+    output:
+        "alignment/{sample}_aligned.bam"
+    shell:
+        """
+        minimap2 -ax map-ont {input[1]} {input[0]} | samtools view -bS | samtools sort -o {output}
+        samtools index {output}
         """
