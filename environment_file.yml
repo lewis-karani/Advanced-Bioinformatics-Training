@@ -1,0 +1,17 @@
+name: covmap-bsl
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - trimmomatic
+  - porechop
+  - medaka
+  - minimap2
+  - ivar
+  - bcftools
+  - samtools
+  - tabix
+  - pbgzip
+  
+  
