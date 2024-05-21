@@ -1,4 +1,4 @@
-name: covmap-bsl
+name: sars-cov
 channels:
   - conda-forge
   - bioconda
