@@ -1,10 +1,12 @@
 # Define the input fastq files
 SAMPLES = ["barcode01","barcode02","barcode03","barcode04","barcode05","barcode06","barcode07","barcode08","barcode09","barcode010","barcode11","barcode12","barcode13","barcode14","barcode15","barcode16","barcode17","barcode18","barcode19","barcode20","barcode21","barcode22","barcode23", "barcode24"] 
 
+# Define the input fastq files
+SAMPLES = ["barcode07", "barcode16"]
+
 rule all:
     input:
-        expand("alignment/{sample}_primertrim.bam", sample=SAMPLES),
-        expand("medaka_output2/{sample}/{sample}.fasta",sample=SAMPLES)
+        ("medaka_output2/consensus_concat.fasta")
 
 # Step 1: Adapter Trimming with Porechop
 rule porechop:
@@ -40,7 +42,6 @@ rule alignment:
         minimap2 -ax map-ont {input[1]} {input[0]} | samtools view -bS | samtools sort -o {output}
         samtools index {output}
         """
-
 #Step 4: ivar trimming of primers
 rule primertrim:
     input:
@@ -68,4 +69,14 @@ rule medaka_consensus:
         mkdir -p {params.medaka_dir}
         medaka consensus {input} {params.medaka_hdf} --model r941_min_high_g360 --batch 200 --threads 2
         medaka stitch {params.medaka_hdf} reference.fasta {output}
+        """
+# Step 6: Concatenate all samples
+rule concatenate_consensus:
+    input:
+        expand("medaka_output2/{sample}/{sample}.fasta" , sample=SAMPLES)
+    output:
+        "medaka_output2/consensus_concat.fasta"
+    shell:
+        """
+        cat {input} > {output}
         """
