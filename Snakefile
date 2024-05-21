@@ -11,7 +11,7 @@ rule all:
 # Step 1: Adapter Trimming with Porechop
 rule porechop:
     input:
-        "data/{sample}.fastq"
+        "data/{sample}.fastq.gz"
     output:
         "data/{sample}_trimmed.fastq"
     shell:
