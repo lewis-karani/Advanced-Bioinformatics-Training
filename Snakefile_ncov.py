@@ -1,15 +1,5 @@
 # Snakefile for SARS-CoV-2 nanopore reads analysis to generate a phylogenetic tree
 
-# Define the conda environment for each rule
-envs = {
-    "trimming": "envs/trimming.yml",
-    "alignment": "envs/alignment.yml",
-    "variant_calling": "envs/variant_calling.yml",
-    "polishing": "envs/polishing.yml",
-    "msa": "envs/msa.yml",
-    "phylogeny": "envs/phylogeny.yml"
-}
-
 # Define the input fastq files
 samples = ["*.fastq.gz"]
 fastq_files = expand("data/barcode*/{sample}", sample=samples)
@@ -24,8 +14,6 @@ rule porechop:
         "data/{sample}.fastq"
     output:
         "data/{sample}_trimmed.fastq"
-    conda:
-        envs["trimming"]
     shell:
         """
         porechop -i {input} -o {output}
@@ -37,9 +25,7 @@ rule trimmomatic:
         "data/{sample}_trimmed.fastq"
     output:
         "data/{sample}_trimmed_filtered.fastq"
-    conda:
-        envs["trimming"]
-    shell:
+  shell:
         """
         trimmomatic SE {input} {output} SLIDINGWINDOW:50:10 MINLEN:100
         """
@@ -51,9 +37,7 @@ rule alignment:
         "reference/reference.fasta"
     output:
         "alignment/{sample}_aligned.bam"
-    conda:
-        envs["alignment"]
-    shell:
+   shell:
         """
         minimap2 -ax map-ont {input[1]} {input[0]} | samtools view -bS | samtools sort -o {output}
         samtools index {output}
@@ -68,8 +52,6 @@ rule ivar:
     output:
         "variants/{sample}.vcf",
         "consensus/{sample}_consensus.fa"
-    conda:
-        envs["variant_calling"]
     shell:
         """
         samtools mpileup -A -d 0 -Q 0 -u -v -f {input.ref} {input.bam} | bcftools call -cv -Oz -o {output[0]}
@@ -85,8 +67,6 @@ rule medaka:
         consensus="consensus/{sample}_consensus.fa"
     output:
         "polished/{sample}_polished.fasta"
-    conda:
-        envs["polishing"]
     shell:
         """
         medaka_consensus -i {input.bam} -d {input.consensus} -o polished/{wildcards.sample}
@@ -99,9 +79,7 @@ rule multiple_sequence_alignment:
         expand("polished/{sample}_polished.fasta", sample=samples)
     output:
         "msa/alignment.fasta"
-    conda:
-        envs["msa"]
-    shell:
+   shell:
         """
         mafft --auto --reorder {input} > {output}
         """
@@ -112,9 +90,7 @@ rule phylogenetic_tree:
         "msa/alignment.fasta"
     output:
         "results/phylogenetic_tree.nwk"
-    conda:
-        envs["phylogeny"]
-    shell:
+   shell:
         """
         iqtree -s {input} -nt AUTO -m GTR+G -bb 1000 -alrt 1000 -pre results/phylogenetic_tree
         cp results/phylogenetic_tree.treefile {output}
