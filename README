@@ -1,0 +1,5 @@
+create an environment named sars-cov by running the following commands using the yaml file provided ie. environment_file.yml
+```
+conda env create --file environment_file.yml
+```
+
