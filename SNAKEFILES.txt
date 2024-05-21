@@ -3,7 +3,8 @@ SAMPLES = ["barcode07", "barcode16"]
 
 rule all:
     input:
-        expand("alignment/{sample}_aligned.bam", sample=SAMPLES)
+        expand("alignment/{sample}_primertrim.bam", sample=SAMPLES),
+        expand("medaka_output2/{sample}/{sample}.fasta",sample=SAMPLES)
 
 # Step 1: Adapter Trimming with Porechop
 rule porechop:
@@ -38,4 +39,33 @@ rule alignment:
         """
         minimap2 -ax map-ont {input[1]} {input[0]} | samtools view -bS | samtools sort -o {output}
         samtools index {output}
+        """
+
+#Step 4: ivar trimming of primers
+rule primertrim:
+    input:
+        "alignment/{sample}_aligned.bam",
+        "ARTIC-V3.bed"
+    output:
+        "alignment/{sample}_primertrim.bam"
+    shell:
+        """
+        ivar trim -e -i {input[0]} -b {input[1]} | samtools sort -o {output}
+        samtools index {output}
+        """
+
+# Step 5: Medaka consensus and stitching
+rule medaka_consensus:
+    input:
+        "alignment/{sample}_primertrim.bam"
+    output:
+        "medaka_output2/{sample}/{sample}.fasta"
+    params:
+        medaka_dir="medaka_output2/{sample}",
+        medaka_hdf="medaka_output2/{sample}/{sample}.hdf"
+    shell:
+        """
+        mkdir -p {params.medaka_dir}
+        medaka consensus {input} {params.medaka_hdf} --model r941_min_high_g360 --batch 200 --threads 2
+        medaka stitch {params.medaka_hdf} reference.fasta {output}
         """
