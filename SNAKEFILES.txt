@@ -3,7 +3,8 @@ SAMPLES = ["barcode01","barcode02","barcode03","barcode04","barcode05","barcode0
 
 rule all:
     input:
-        "msa/alignment.fasta"
+        "msa/alignment.fasta",
+        "iqtree/alignment.treefile"
 
 # Step 1: Adapter Trimming with Porechop
 rule porechop:
@@ -101,4 +102,16 @@ rule multiple_sequence_alignment:
     shell:
         """
         mafft --auto --reorder {input} > {output}
+        """
+
+# Step 9: Build and visualize a phylogenetic tree with IQ-TREE
+rule iqtree:
+    input:
+        "msa/alignment.fasta"
+    output:
+        "iqtree/alignment.treefile"
+    shell:
+        """
+        mkdir -p iqtree
+        iqtree2 -s {input} -m GTR+G -nt AUTO -bb 1000 -pre iqtree/alignment
         """
