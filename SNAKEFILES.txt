@@ -61,13 +61,24 @@ rule medaka_consensus:
     output:
         "medaka_output2/{sample}/{sample}.fasta"
     params:
-        medaka_dir="medaka_output2/{sample}",
-        medaka_hdf="medaka_output2/{sample}/{sample}.hdf"
+        model="r941_min_high_g360"
     shell:
         """
-        mkdir -p {params.medaka_dir}
-        medaka consensus {input} {params.medaka_hdf} --model r941_min_high_g360 --batch 200 --threads 2
-        medaka stitch {params.medaka_hdf} reference.fasta {output}
+        mkdir -p medaka_output2/{wildcards.sample}
+
+        # Define temporary hdf file
+        hdf_file="medaka_output2/{wildcards.sample}/{wildcards.sample}.hdf"
+
+        # Remove existing hdf file if it exists
+        if [ -f {wildcards.sample}_hdf ]; then
+            rm {wildcards.sample}_hdf
+        fi
+
+        # Run medaka consensus
+        medaka consensus {input} {wildcards.sample}_hdf --model {params.model} --batch 200 --threads 2
+
+        # Run medaka stitch
+        medaka stitch {wildcards.sample}_hdf reference.fasta {output}
         """
 
 # Step 6: Update FASTA headers to file names
@@ -104,7 +115,7 @@ rule multiple_sequence_alignment:
         mafft --auto --reorder {input} > {output}
         """
 
-# Step 9: Build and visualize a phylogenetic tree with IQ-TREE
+# Step 9: Build a phylogenetic tree with IQ-TREE
 rule iqtree:
     input:
         "msa/alignment.fasta"
