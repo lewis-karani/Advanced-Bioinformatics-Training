@@ -56,29 +56,22 @@ rule primertrim:
 
 # Step 5: Medaka consensus and stitching
 rule medaka_consensus:
-    input:
-        "alignment/{sample}_primertrim.bam"
+   input:
+        bam="alignment/{sample}_primertrim.bam",
+        reads="data/{sample}.fastq",
+        reference="reference.fasta"
     output:
-        "medaka_output2/{sample}/{sample}.fasta"
+        consensus="medaka_output2/{sample}/{sample}.fasta"
     params:
-        model="r941_min_high_g360"
+        medaka_dir="medaka_output2/{sample}",
+        medaka_hdf="medaka_output2/{sample}/{sample}.hdf",
+        model="r941_min_high_g360",
+        threads=4
     shell:
         """
-        mkdir -p medaka_output2/{wildcards.sample}
-
-        # Define temporary hdf file
-        hdf_file="medaka_output2/{wildcards.sample}/{wildcards.sample}.hdf"
-
-        # Remove existing hdf file if it exists
-        if [ -f {wildcards.sample}_hdf ]; then
-            rm {wildcards.sample}_hdf
-        fi
-
-        # Run medaka consensus
-        medaka consensus {input} {wildcards.sample}_hdf --model {params.model} --batch 200 --threads 2
-
-        # Run medaka stitch
-        medaka stitch {wildcards.sample}_hdf reference.fasta {output}
+        mkdir -p {params.medaka_dir}
+        medaka_consensus -i {input.reads} -d {input.reference} -b {input.bam} -o {params.medaka_hdf} -t {params.threads} -m {params.model}
+        medaka_stitch -i {params.medaka_dir} -o {output.consensus}
         """
 
 # Step 6: Update FASTA headers to file names
