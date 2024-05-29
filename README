@@ -8,12 +8,6 @@ cd sarscov2/
 # 3. download and install all the packages you need 
 conda env create -f environment_file.yml
 
-# 4. acviate the conda environment with all the packages
+# 4. actviate the conda environment with all the packages
 conda activate sarscov2
-create an environment named sarscov2 by running the following commands using the yaml file provided ie. environment_file.yml
-
-```
-conda env create --file environment_file.yml
-
-```
 
