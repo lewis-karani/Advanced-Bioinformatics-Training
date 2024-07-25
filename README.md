@@ -5,7 +5,7 @@ git clone https://github.com/lewis-karani/Advanced-Bioinformatics-Training
 ```
 ### 2. change to the dir
 ```
-cd sarscov2/
+cd Advanced-Bioinformatics-Training/
 ```
 ### 3. download and install all the packages you need into an analysis environment 
 ```
